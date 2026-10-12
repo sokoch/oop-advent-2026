@@ -151,7 +151,13 @@ def metno_to_dataframe(metno_json: dict[str, Any]) -> pd.DataFrame:
         {"temp_C": ["min", "max"], "precip_mm": "sum"}
     )
     daily.columns = ["temp_min_C", "temp_max_C", "precip_mm"]
-    return daily.reset_index().rename(columns={"time": "date"})
+    daily = daily.reset_index().rename(columns={"time": "date"})
+    # Normalize to tz-naive calendar dates for comparability with
+    # Open-Meteo's daily output (which is also tz-naive).
+    daily["date"] = (
+        pd.to_datetime(daily["date"]).dt.tz_localize(None).dt.normalize()
+    )
+    return daily
 
 
 # --- text summary -------------------------------------------------------------
