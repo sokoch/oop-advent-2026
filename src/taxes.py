@@ -387,3 +387,129 @@ class CIT(Tax):
                 f"cit_{self.RATE}": Money(tax),
             },
         )
+
+# =========================================================================
+# Extension (Option B) — TaxPlanner
+# =========================================================================
+@dataclass(frozen=True)
+class ScenarioResult:
+    """The result of one remuneration scenario."""
+
+    label: str
+    gross: Money
+    cit: Money
+    paye: Money
+    withholding: Money
+    net: Money
+
+    def __str__(self) -> str:
+        return (
+            f"{self.label}:\n"
+            f"  gross       = {self.gross}\n"
+            f"  CIT         = {self.cit}\n"
+            f"  PAYE        = {self.paye}\n"
+            f"  withholding = {self.withholding}\n"
+            f"  net         = {self.net}"
+        )
+
+
+class TaxPlanner:
+    """Compare two remuneration scenarios on an after-tax basis.
+
+    Scenario A — **Salary**:
+        Company earns `company_profit`. Owner takes `gross` as salary.
+        * PAYE is computed on the salary (via PAYE).
+        * NSSF is ignored for simplicity; add it if needed.
+        * Company still pays CIT on `company_profit`.
+
+    Scenario B — **Dividend**:
+        Company earns `company_profit`, pays CIT on the whole profit,
+        then distributes `gross` as a dividend from the post-tax pool.
+        * Withholding tax at 10% applies to the dividend paid to the owner.
+
+    The comparison is on **net cash to the owner**, which is the number
+    that matters to the recipient. Both scenarios assume a resident
+    individual and a resident company.
+
+    Parameters
+    ----------
+    paye:
+        Instance of PAYE used for the salary path.
+    cit:
+        Instance of CIT used for both scenarios.
+    withholding_rate:
+        Dividend withholding rate. Default 10%.
+    """
+
+    def __init__(
+        self,
+        paye: PAYE | None = None,
+        cit: CIT | None = None,
+        *,
+        withholding_rate: Decimal = Decimal("0.10"),
+    ) -> None:
+        self.paye = paye or PAYE()
+        self.cit = cit or CIT()
+        self.withholding_rate = withholding_rate
+
+    def salary_scenario(
+        self,
+        company_profit: Money,
+        gross_salary: Money,
+        *,
+        as_of: date,
+    ) -> ScenarioResult:
+        """Owner takes `gross_salary` as salary; company pays CIT on profit."""
+        cit_ctx = TaxContext(gross=company_profit, as_of=as_of)
+        cit_result = self.cit.calculate(cit_ctx)
+
+        paye_ctx = TaxContext(gross=gross_salary, as_of=as_of)
+        paye_result = self.paye.calculate(paye_ctx)
+
+        net = gross_salary - paye_result.tax
+        return ScenarioResult(
+            label="Salary",
+            gross=gross_salary,
+            cit=cit_result.tax,
+            paye=paye_result.tax,
+            withholding=Money(Decimal("0")),
+            net=net,
+        )
+
+    def dividend_scenario(
+        self,
+        company_profit: Money,
+        dividend: Money,
+        *,
+        as_of: date,
+    ) -> ScenarioResult:
+        """Owner takes `dividend` as a dividend from post-CIT profit."""
+        cit_ctx = TaxContext(gross=company_profit, as_of=as_of)
+        cit_result = self.cit.calculate(cit_ctx)
+
+        withholding = Money(self.withholding_rate * dividend.amount)
+        net = dividend - withholding
+        return ScenarioResult(
+            label="Dividend",
+            gross=dividend,
+            cit=cit_result.tax,
+            paye=Money(Decimal("0")),
+            withholding=withholding,
+            net=net,
+        )
+
+    def compare(
+        self,
+        company_profit: Money,
+        amount: Money,
+        *,
+        as_of: date,
+    ) -> dict[str, ScenarioResult | Money]:
+        """Return both scenarios and the difference in net cash to the owner."""
+        salary = self.salary_scenario(company_profit, amount, as_of=as_of)
+        dividend = self.dividend_scenario(company_profit, amount, as_of=as_of)
+        return {
+            "salary": salary,
+            "dividend": dividend,
+            "difference": salary.net - dividend.net,
+        }
