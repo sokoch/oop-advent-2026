@@ -27,8 +27,8 @@ MET Norway requires an identifying contact in the `User-Agent` header.
 Set it via environment variable before running the notebook:
 
 ```bash
-export CONTACT_EMAIL="b40822@students.ucu.ac.ug"
-export USER_AGENT="OOP-Advent-2026/1.0 (b40822@students.ucu.ac.ug)"
+export CONTACT_EMAIL="your.name@university.edu"
+export USER_AGENT="OOP-Advent-2026/1.0 (your.name@university.edu)"
 ```
 
 ### Run
