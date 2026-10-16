@@ -117,7 +117,7 @@ assistant. Specifically:
 - Boundary values and tax rules were cross-checked against the
   assignment brief. Production use would require verifying against the
   current URA notice.
-- The author is prepared to explain any line of code in a viva.
+- The author is prepared to explain any line of code in this project
 
 ---
 
